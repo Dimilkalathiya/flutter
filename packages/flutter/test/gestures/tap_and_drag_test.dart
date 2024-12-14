@@ -16,6 +16,7 @@ void main() {
 
   late List<String> events;
   late BaseTapAndDragGestureRecognizer tapAndDrag;
+  OffsetPair? lastOffsetPair;
 
   void setUpTapAndPanGestureRecognizer({
     bool eagerVictoryOnDrag = true, // This is the default for [BaseTapAndDragGestureRecognizer].
@@ -38,6 +39,7 @@ void main() {
       }
       ..onDragEnd = (TapDragEndDetails details) {
         events.add('panend#${details.consecutiveTapCount}');
+        lastOffsetPair = OffsetPair(local: details.localPosition, global: details.globalPosition);
       }
       ..onCancel = () {
         events.add('cancel');
@@ -75,6 +77,7 @@ void main() {
 
   setUp(() {
     events = <String>[];
+    lastOffsetPair = null;
   });
 
   // Down/up pair 1: normal tap sequence
@@ -1016,5 +1019,18 @@ void main() {
     tester.route(up1);
     GestureBinding.instance.gestureArena.sweep(1);
     expect(events, <String>['down#1']);
+  });
+
+    testGesture('onDragEnd returns position', (GestureTester tester) {
+    setUpTapAndPanGestureRecognizer();
+
+    final TestPointer pointer = TestPointer(2);
+    final PointerDownEvent down = pointer.down(const Offset(10.0, 10.0));
+    tapAndDrag.addPointer(down);
+    tester.closeArena(2);
+    tester.route(down);
+    tester.route(pointer.move(const Offset(40.0, 45.0)));
+    tester.route(pointer.up());
+    expect(lastOffsetPair.toString(), const OffsetPair(local: Offset(40.0, 45.0), global: Offset(40.0, 45.0)).toString());
   });
 }

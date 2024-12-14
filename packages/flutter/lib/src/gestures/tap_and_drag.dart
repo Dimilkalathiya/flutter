@@ -372,12 +372,15 @@ class TapDragEndDetails with Diagnosticable {
   TapDragEndDetails({
     this.velocity = Velocity.zero,
     this.primaryVelocity,
+    this.globalPosition = Offset.zero,
     required this.consecutiveTapCount,
+    Offset? localPosition,
   }) : assert(
          primaryVelocity == null
            || primaryVelocity == velocity.pixelsPerSecond.dx
            || primaryVelocity == velocity.pixelsPerSecond.dy,
-       );
+       ),
+      localPosition = localPosition ?? globalPosition;
 
   /// The velocity the pointer was moving when it stopped contacting the screen.
   ///
@@ -400,12 +403,32 @@ class TapDragEndDetails with Diagnosticable {
   /// the number in the series this tap is.
   final int consecutiveTapCount;
 
+  /// The global position the pointer is located at when the drag
+  /// gesture has been completed.
+  ///
+  /// Defaults to the origin if not specified in the constructor.
+  ///
+  /// See also:
+  ///
+  ///  * [localPosition], which is the [globalPosition] transformed to the
+  ///    coordinate space of the event receiver.
+  final Offset globalPosition;
+
+
+  /// The local position in the coordinate system of the event receiver when
+  /// the drag gesture has been completed.
+  ///
+  /// Defaults to [globalPosition] if not specified in the constructor.
+  final Offset localPosition;
+
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<Velocity>('velocity', velocity));
     properties.add(DiagnosticsProperty<double?>('primaryVelocity', primaryVelocity));
     properties.add(DiagnosticsProperty<int>('consecutiveTapCount', consecutiveTapCount));
+    properties.add(DiagnosticsProperty<Offset>('globalPosition', globalPosition));
+    properties.add(DiagnosticsProperty<Offset>('localPosition', localPosition));
   }
 }
 
@@ -903,6 +926,13 @@ sealed class BaseTapAndDragGestureRecognizer extends OneSequenceGestureRecognize
   late double _globalDistanceMovedAllAxes;
   OffsetPair? _correctedPosition;
 
+  /// The local and global offsets of the last pointer event received.
+  ///
+  /// It is used to create the [DragEndDetails], which provides information about
+  /// the end of a drag gesture.
+  OffsetPair get lastPosition => _lastPosition;
+  late OffsetPair _lastPosition;
+
   // For drag update throttle.
   TapDragUpdateDetails? _lastDragUpdateDetails;
   Timer? _dragUpdateThrottleTimer;
@@ -961,6 +991,7 @@ sealed class BaseTapAndDragGestureRecognizer extends OneSequenceGestureRecognize
       _globalDistanceMovedAllAxes = 0.0;
       _dragState = _DragState.possible;
       _initialPosition = OffsetPair(global: event.position, local: event.localPosition);
+      _lastPosition = _initialPosition;
       _deadlineTimer = Timer(_deadline, () => _didExceedDeadlineWithEvent(event));
     }
   }
@@ -1247,6 +1278,8 @@ sealed class BaseTapAndDragGestureRecognizer extends OneSequenceGestureRecognize
     final Offset globalPosition = _correctedPosition != null ? _correctedPosition!.global : event.position;
     final Offset localPosition = _correctedPosition != null ? _correctedPosition!.local : event.localPosition;
 
+    _lastPosition = OffsetPair(local: localPosition, global: globalPosition);
+
     final TapDragUpdateDetails details =  TapDragUpdateDetails(
       sourceTimeStamp: event.timeStamp,
       delta: event.localDelta,
@@ -1281,6 +1314,8 @@ sealed class BaseTapAndDragGestureRecognizer extends OneSequenceGestureRecognize
       TapDragEndDetails(
         primaryVelocity: 0.0,
         consecutiveTapCount: consecutiveTapCount,
+        globalPosition: _lastPosition.global,
+        localPosition: _lastPosition.local,
       );
 
     if (onDragEnd != null) {
